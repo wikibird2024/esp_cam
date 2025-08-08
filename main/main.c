@@ -14,7 +14,10 @@
 #include "freertos/task.h"
 #include "nvs_flash.h"
 #include "sdkconfig.h"
+#include <inttypes.h>
 #include <string.h>
+#include <sys/socket.h>
+#include <sys/time.h>
 
 #define CAM_PIN_XCLK 15
 #define CAM_PIN_SIOD 4
@@ -33,10 +36,14 @@
 
 static const char *TAG = "camera";
 static bool wifi_connected = false;
+static uint32_t frame_counter = 0;
+static uint32_t last_fps_time = 0;
+static uint32_t fps_frame_count = 0;
+static float current_fps = 0.0;
 
 static const char index_html[] =
-    "<html><head><title>ESP32-S3 Camera</title></head>"
-    "<body><img src=\"/stream\" style=\"width:100%;\"></body></html>";
+    "<html><head><title>ESP32-S3 Camera</title></head><body><img "
+    "src=\"/stream\" style=\"width:100%;\"></body></html>";
 
 static void wifi_event_handler(void *arg, esp_event_base_t event_base,
                                int32_t event_id, void *event_data) {
@@ -44,11 +51,11 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base,
     esp_wifi_connect();
   } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
     ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
-    ESP_LOGI(TAG, "Got IP Address: " IPSTR, IP2STR(&event->ip_info.ip));
+    ESP_LOGI(TAG, "Got IP: " IPSTR, IP2STR(&event->ip_info.ip));
     wifi_connected = true;
   } else if (event_base == WIFI_EVENT &&
              event_id == WIFI_EVENT_STA_DISCONNECTED) {
-    ESP_LOGW(TAG, "Disconnected from Wi-Fi, retrying...");
+    ESP_LOGW(TAG, "Disconnected. Reconnecting...");
     esp_wifi_connect();
     wifi_connected = false;
   }
@@ -79,8 +86,7 @@ void wifi_init(void) {
   ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
   ESP_ERROR_CHECK(esp_wifi_start());
 
-  ESP_LOGI(TAG, "Wi-Fi started, connecting to SSID: %s",
-           CONFIG_CAMERA_WIFI_SSID);
+  ESP_LOGI(TAG, "WiFi Init Done, SSID: %s", CONFIG_CAMERA_WIFI_SSID);
 }
 
 static framesize_t get_camera_frame_size() {
@@ -107,28 +113,28 @@ static framesize_t get_camera_frame_size() {
 #endif
 }
 
-static const char *get_camera_frame_size_str() {
-#if CONFIG_CAMERA_FRAME_SIZE_UXGA
-  return "UXGA";
-#elif CONFIG_CAMERA_FRAME_SIZE_SXGA
-  return "SXGA";
-#elif CONFIG_CAMERA_FRAME_SIZE_XGA
-  return "XGA";
-#elif CONFIG_CAMERA_FRAME_SIZE_SVGA
-  return "SVGA";
-#elif CONFIG_CAMERA_FRAME_SIZE_VGA
-  return "VGA";
-#elif CONFIG_CAMERA_FRAME_SIZE_CIF
-  return "CIF";
-#elif CONFIG_CAMERA_FRAME_SIZE_QVGA
-  return "QVGA";
-#elif CONFIG_CAMERA_FRAME_SIZE_HQVGA
-  return "HQVGA";
-#elif CONFIG_CAMERA_FRAME_SIZE_QQVGA
-  return "QQVGA";
-#else
-  return "UNKNOWN";
-#endif
+static uint32_t get_timestamp_ms() {
+  struct timeval tv;
+  gettimeofday(&tv, NULL);
+  return (uint32_t)(tv.tv_sec * 1000 + tv.tv_usec / 1000);
+}
+
+static void calculate_fps() {
+  fps_frame_count++;
+  uint32_t now = get_timestamp_ms();
+  if (now - last_fps_time >= 5000) {
+    current_fps = (float)fps_frame_count * 1000.0 / (now - last_fps_time);
+    ESP_LOGI(TAG, "FPS: %.2f", current_fps);
+    fps_frame_count = 0;
+    last_fps_time = now;
+  }
+}
+
+static bool is_client_connected(httpd_req_t *req) {
+  int sock = httpd_req_to_sockfd(req);
+  int err = 0;
+  socklen_t len = sizeof(err);
+  return getsockopt(sock, SOL_SOCKET, SO_ERROR, &err, &len) == 0 && err == 0;
 }
 
 esp_err_t camera_init(void) {
@@ -155,51 +161,52 @@ esp_err_t camera_init(void) {
       .pixel_format = PIXFORMAT_JPEG,
       .frame_size = get_camera_frame_size(),
       .jpeg_quality = CONFIG_CAMERA_JPEG_QUALITY,
-      .fb_count = 1,
-      .grab_mode = CAMERA_GRAB_WHEN_EMPTY,
+      .fb_count = 2,
+      .grab_mode = CAMERA_GRAB_LATEST,
       .fb_location = CAMERA_FB_IN_PSRAM,
   };
 
   esp_err_t err = esp_camera_init(&config);
   if (err != ESP_OK) {
-    ESP_LOGE(TAG, "Camera init failed with error: 0x%x", err);
+    ESP_LOGE(TAG, "Camera init failed: 0x%x", err);
     return err;
   }
-
-  ESP_LOGI(TAG, "Camera initialized: frame size: %s, quality: %d",
-           get_camera_frame_size_str(), CONFIG_CAMERA_JPEG_QUALITY);
   return ESP_OK;
 }
 
 static esp_err_t stream_handler(httpd_req_t *req) {
-  camera_fb_t *fb = NULL;
-  char part_buf[64];
-
-  ESP_LOGI(TAG, "Starting camera stream...");
+  camera_fb_t *fb;
+  char hdr_buf[128];
   httpd_resp_set_type(req, "multipart/x-mixed-replace;boundary=frame");
+  last_fps_time = get_timestamp_ms();
 
   while (true) {
+    if (!is_client_connected(req))
+      break;
     fb = esp_camera_fb_get();
-    if (!fb) {
-      ESP_LOGE(TAG, "Camera capture failed");
-      return ESP_FAIL;
-    }
+    if (!fb)
+      continue;
+    frame_counter++;
 
-    size_t hlen = snprintf(
-        part_buf, sizeof(part_buf),
-        "Content-Type: image/jpeg\r\nContent-Length: %u\r\n\r\n", fb->len);
+    size_t hdr_len = snprintf(hdr_buf, sizeof(hdr_buf),
+                              "Content-Type: image/jpeg\r\n"
+                              "Content-Length: %u\r\n"
+                              "X-Frame-Number: %" PRIu32 "\r\n"
+                              "X-Timestamp: %" PRIu32 "\r\n"
+                              "X-FPS: %.2f\r\n\r\n",
+                              (unsigned int)fb->len, // Cast để đúng định dạng
+                              frame_counter, get_timestamp_ms(), current_fps);
 
     if (httpd_resp_send_chunk(req, "\r\n--frame\r\n", 12) != ESP_OK ||
-        httpd_resp_send_chunk(req, part_buf, hlen) != ESP_OK ||
+        httpd_resp_send_chunk(req, hdr_buf, hdr_len) != ESP_OK ||
         httpd_resp_send_chunk(req, (const char *)fb->buf, fb->len) != ESP_OK) {
       esp_camera_fb_return(fb);
       break;
     }
-
     esp_camera_fb_return(fb);
+    calculate_fps();
     vTaskDelay(pdMS_TO_TICKS(CONFIG_CAMERA_STREAM_FRAME_INTERVAL));
   }
-
   return ESP_OK;
 }
 
@@ -208,76 +215,56 @@ static esp_err_t index_handler(httpd_req_t *req) {
   return httpd_resp_send(req, index_html, strlen(index_html));
 }
 
-void start_webserver(void) {
-  httpd_config_t config = HTTPD_DEFAULT_CONFIG();
-  httpd_handle_t server = NULL;
-
-  if (httpd_start(&server, &config) == ESP_OK) {
-    httpd_register_uri_handler(
-        server, &(httpd_uri_t){
-                    .uri = "/", .method = HTTP_GET, .handler = index_handler});
-    httpd_register_uri_handler(server,
-                               &(httpd_uri_t){.uri = "/stream",
-                                              .method = HTTP_GET,
-                                              .handler = stream_handler});
-    ESP_LOGI(TAG, "HTTP server started on port %d", config.server_port);
-  } else {
-    ESP_LOGE(TAG, "Failed to start HTTP server");
+void wifi_monitor_task(void *pvParameters) {
+  while (true) {
+    if (!wifi_connected) {
+      ESP_LOGI(TAG, "Retrying WiFi...");
+      esp_wifi_connect();
+    }
+    vTaskDelay(pdMS_TO_TICKS(10000));
   }
 }
 
-void print_chip_info(void) {
-  esp_chip_info_t chip_info;
-  esp_chip_info(&chip_info);
+void start_webserver(void) {
+  httpd_config_t config = HTTPD_DEFAULT_CONFIG();
+  config.task_priority = 5;
+  config.stack_size = 8192;
+  httpd_handle_t server = NULL;
 
-  ESP_LOGI(TAG, "Chip: %s, Cores: %d, Revision: %d", CONFIG_IDF_TARGET,
-           chip_info.cores, chip_info.revision);
-
-  uint32_t flash_size = 0;
-  if (esp_flash_get_size(NULL, &flash_size) == ESP_OK) {
-    ESP_LOGI(TAG, "Flash size: %luMB",
-             (unsigned long)(flash_size / (1024 * 1024)));
-  } else {
-    ESP_LOGE(TAG, "Failed to get flash size");
-  }
-
-  size_t psram = esp_psram_get_size();
-  if (esp_psram_is_initialized()) {
-    ESP_LOGI(TAG, "PSRAM: %luMB", (unsigned long)(psram / (1024 * 1024)));
-  } else {
-    ESP_LOGE(TAG, "PSRAM NOT available or failed to init!");
+  if (httpd_start(&server, &config) == ESP_OK) {
+    httpd_register_uri_handler(server, &(httpd_uri_t){.uri = "/",
+                                                      .method = HTTP_GET,
+                                                      .handler = index_handler,
+                                                      .user_ctx = NULL});
+    httpd_register_uri_handler(server, &(httpd_uri_t){.uri = "/stream",
+                                                      .method = HTTP_GET,
+                                                      .handler = stream_handler,
+                                                      .user_ctx = NULL});
+    ESP_LOGI(TAG, "HTTP server started");
   }
 }
 
 void app_main(void) {
-  ESP_LOGI(TAG, "Booting ESP32-S3 Camera Module...");
-
+  ESP_LOGI(TAG, "Starting Camera App...");
   esp_err_t ret = nvs_flash_init();
   if (ret == ESP_ERR_NVS_NO_FREE_PAGES ||
       ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
     ESP_ERROR_CHECK(nvs_flash_erase());
     ESP_ERROR_CHECK(nvs_flash_init());
   }
-
-  print_chip_info();
   wifi_init();
-
-  for (int i = 0; i < 20 && !wifi_connected; ++i) {
-    ESP_LOGI(TAG, "Waiting for Wi-Fi...");
+  for (int i = 0; i < 60 && !wifi_connected; i++) {
+    ESP_LOGI(TAG, "Waiting for WiFi... (%d/60)", i + 1);
     vTaskDelay(pdMS_TO_TICKS(500));
   }
-
-  if (!wifi_connected) {
-    ESP_LOGE(TAG, "Wi-Fi connection failed");
-    return;
-  }
+  xTaskCreate(wifi_monitor_task, "wifi_retry", 2048, NULL, 1, NULL);
 
   ESP_ERROR_CHECK(camera_init());
   start_webserver();
 
-  ESP_LOGI(TAG, "Setup complete! Access the camera stream at http://<IP>/");
-
-  while (true) {
+  while (1) {
     vTaskDelay(pdMS_TO_TICKS(10000));
+    ESP_LOGI(TAG, "System OK - Frames: %" PRIu32 ", FPS: %.2f", frame_counter,
+             current_fps);
   }
 }
