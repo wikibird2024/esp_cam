@@ -1,4 +1,5 @@
 
+// main.c
 #include "driver/ledc.h"
 #include "esp_camera.h"
 #include "esp_chip_info.h"
@@ -86,6 +87,7 @@ void wifi_init(void) {
   ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
   ESP_ERROR_CHECK(esp_wifi_start());
 
+  esp_log_level_set("wifi", ESP_LOG_WARN);
   ESP_LOGI(TAG, "WiFi Init Done, SSID: %s", CONFIG_CAMERA_WIFI_SSID);
 }
 
@@ -161,8 +163,8 @@ esp_err_t camera_init(void) {
       .pixel_format = PIXFORMAT_JPEG,
       .frame_size = get_camera_frame_size(),
       .jpeg_quality = CONFIG_CAMERA_JPEG_QUALITY,
-      .fb_count = 2,
-      .grab_mode = CAMERA_GRAB_LATEST,
+      .fb_count = 3,
+      .grab_mode = CAMERA_GRAB_WHEN_EMPTY,
       .fb_location = CAMERA_FB_IN_PSRAM,
   };
 
@@ -194,8 +196,8 @@ static esp_err_t stream_handler(httpd_req_t *req) {
                               "X-Frame-Number: %" PRIu32 "\r\n"
                               "X-Timestamp: %" PRIu32 "\r\n"
                               "X-FPS: %.2f\r\n\r\n",
-                              (unsigned int)fb->len, // Cast để đúng định dạng
-                              frame_counter, get_timestamp_ms(), current_fps);
+                              (unsigned int)fb->len, frame_counter,
+                              get_timestamp_ms(), current_fps);
 
     if (httpd_resp_send_chunk(req, "\r\n--frame\r\n", 12) != ESP_OK ||
         httpd_resp_send_chunk(req, hdr_buf, hdr_len) != ESP_OK ||

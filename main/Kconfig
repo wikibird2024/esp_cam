@@ -1,3 +1,4 @@
+
 menu "Camera Web Server Configuration"
 
     config CAMERA_WIFI_SSID
@@ -52,4 +53,3 @@ menu "Camera Web Server Configuration"
             Lower value increases frame rate but uses more bandwidth and CPU.
 
 endmenu
-
