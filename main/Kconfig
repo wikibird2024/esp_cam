@@ -1,0 +1,29 @@
+menu "Camera Web Server Configuration"
+
+    config CAMERA_WIFI_SSID
+        string "Wi-Fi SSID"
+        default "pixel"
+        help
+            Enter the SSID of your Wi-Fi network.
+
+    config CAMERA_WIFI_PASSWORD
+        string "Wi-Fi Password"
+        default "71111111"
+        help
+            Enter the password for your Wi-Fi network.
+
+    config CAMERA_FRAME_SIZE
+        string "Camera Frame Size"
+        default "SVGA"
+        help
+            Choose the desired frame size for the camera stream.
+            Options: UXGA, SXGA, XGA, SVGA, VGA, CIF, QVGA, HQVGA, QQVGA.
+
+    config CAMERA_JPEG_QUALITY
+        int "JPEG Quality"
+        range 0 63
+        default 12
+        help
+            Set the JPEG quality (0-63). Lower numbers mean higher quality and larger file size.
+
+endmenu
