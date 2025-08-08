@@ -84,53 +84,81 @@ void wifi_init(void) {
 }
 
 static framesize_t get_camera_frame_size() {
-  if (strcmp(CONFIG_CAMERA_FRAME_SIZE, "UXGA") == 0)
-    return FRAMESIZE_UXGA;
-  if (strcmp(CONFIG_CAMERA_FRAME_SIZE, "SXGA") == 0)
-    return FRAMESIZE_SXGA;
-  if (strcmp(CONFIG_CAMERA_FRAME_SIZE, "XGA") == 0)
-    return FRAMESIZE_XGA;
-  if (strcmp(CONFIG_CAMERA_FRAME_SIZE, "SVGA") == 0)
-    return FRAMESIZE_SVGA;
-  if (strcmp(CONFIG_CAMERA_FRAME_SIZE, "VGA") == 0)
-    return FRAMESIZE_VGA;
-  if (strcmp(CONFIG_CAMERA_FRAME_SIZE, "CIF") == 0)
-    return FRAMESIZE_CIF;
-  if (strcmp(CONFIG_CAMERA_FRAME_SIZE, "QVGA") == 0)
-    return FRAMESIZE_QVGA;
-  if (strcmp(CONFIG_CAMERA_FRAME_SIZE, "HQVGA") == 0)
-    return FRAMESIZE_HQVGA;
-  if (strcmp(CONFIG_CAMERA_FRAME_SIZE, "QQVGA") == 0)
-    return FRAMESIZE_QQVGA;
+#if CONFIG_CAMERA_FRAME_SIZE_UXGA
+  return FRAMESIZE_UXGA;
+#elif CONFIG_CAMERA_FRAME_SIZE_SXGA
+  return FRAMESIZE_SXGA;
+#elif CONFIG_CAMERA_FRAME_SIZE_XGA
+  return FRAMESIZE_XGA;
+#elif CONFIG_CAMERA_FRAME_SIZE_SVGA
   return FRAMESIZE_SVGA;
+#elif CONFIG_CAMERA_FRAME_SIZE_VGA
+  return FRAMESIZE_VGA;
+#elif CONFIG_CAMERA_FRAME_SIZE_CIF
+  return FRAMESIZE_CIF;
+#elif CONFIG_CAMERA_FRAME_SIZE_QVGA
+  return FRAMESIZE_QVGA;
+#elif CONFIG_CAMERA_FRAME_SIZE_HQVGA
+  return FRAMESIZE_HQVGA;
+#elif CONFIG_CAMERA_FRAME_SIZE_QQVGA
+  return FRAMESIZE_QQVGA;
+#else
+  return FRAMESIZE_SVGA;
+#endif
+}
+
+static const char *get_camera_frame_size_str() {
+#if CONFIG_CAMERA_FRAME_SIZE_UXGA
+  return "UXGA";
+#elif CONFIG_CAMERA_FRAME_SIZE_SXGA
+  return "SXGA";
+#elif CONFIG_CAMERA_FRAME_SIZE_XGA
+  return "XGA";
+#elif CONFIG_CAMERA_FRAME_SIZE_SVGA
+  return "SVGA";
+#elif CONFIG_CAMERA_FRAME_SIZE_VGA
+  return "VGA";
+#elif CONFIG_CAMERA_FRAME_SIZE_CIF
+  return "CIF";
+#elif CONFIG_CAMERA_FRAME_SIZE_QVGA
+  return "QVGA";
+#elif CONFIG_CAMERA_FRAME_SIZE_HQVGA
+  return "HQVGA";
+#elif CONFIG_CAMERA_FRAME_SIZE_QQVGA
+  return "QQVGA";
+#else
+  return "UNKNOWN";
+#endif
 }
 
 esp_err_t camera_init(void) {
-  camera_config_t config = {.pin_d0 = CAM_PIN_D0,
-                            .pin_d1 = CAM_PIN_D1,
-                            .pin_d2 = CAM_PIN_D2,
-                            .pin_d3 = CAM_PIN_D3,
-                            .pin_d4 = CAM_PIN_D4,
-                            .pin_d5 = CAM_PIN_D5,
-                            .pin_d6 = CAM_PIN_D6,
-                            .pin_d7 = CAM_PIN_D7,
-                            .pin_xclk = CAM_PIN_XCLK,
-                            .pin_pclk = CAM_PIN_PCLK,
-                            .pin_vsync = CAM_PIN_VSYNC,
-                            .pin_href = CAM_PIN_HREF,
-                            .pin_sccb_sda = CAM_PIN_SIOD,
-                            .pin_sccb_scl = CAM_PIN_SIOC,
-                            .pin_pwdn = -1,
-                            .pin_reset = -1,
-                            .xclk_freq_hz = 20000000,
-                            .ledc_timer = LEDC_TIMER_0,
-                            .ledc_channel = LEDC_CHANNEL_0,
-                            .pixel_format = PIXFORMAT_JPEG,
-                            .frame_size = get_camera_frame_size(),
-                            .jpeg_quality = CONFIG_CAMERA_JPEG_QUALITY,
-                            .fb_count = 1,
-                            .grab_mode = CAMERA_GRAB_WHEN_EMPTY,
-                            .fb_location = CAMERA_FB_IN_PSRAM};
+  camera_config_t config = {
+      .pin_d0 = CAM_PIN_D0,
+      .pin_d1 = CAM_PIN_D1,
+      .pin_d2 = CAM_PIN_D2,
+      .pin_d3 = CAM_PIN_D3,
+      .pin_d4 = CAM_PIN_D4,
+      .pin_d5 = CAM_PIN_D5,
+      .pin_d6 = CAM_PIN_D6,
+      .pin_d7 = CAM_PIN_D7,
+      .pin_xclk = CAM_PIN_XCLK,
+      .pin_pclk = CAM_PIN_PCLK,
+      .pin_vsync = CAM_PIN_VSYNC,
+      .pin_href = CAM_PIN_HREF,
+      .pin_sccb_sda = CAM_PIN_SIOD,
+      .pin_sccb_scl = CAM_PIN_SIOC,
+      .pin_pwdn = -1,
+      .pin_reset = -1,
+      .xclk_freq_hz = 20000000,
+      .ledc_timer = LEDC_TIMER_0,
+      .ledc_channel = LEDC_CHANNEL_0,
+      .pixel_format = PIXFORMAT_JPEG,
+      .frame_size = get_camera_frame_size(),
+      .jpeg_quality = CONFIG_CAMERA_JPEG_QUALITY,
+      .fb_count = 1,
+      .grab_mode = CAMERA_GRAB_WHEN_EMPTY,
+      .fb_location = CAMERA_FB_IN_PSRAM,
+  };
 
   esp_err_t err = esp_camera_init(&config);
   if (err != ESP_OK) {
@@ -139,7 +167,7 @@ esp_err_t camera_init(void) {
   }
 
   ESP_LOGI(TAG, "Camera initialized: frame size: %s, quality: %d",
-           CONFIG_CAMERA_FRAME_SIZE, CONFIG_CAMERA_JPEG_QUALITY);
+           get_camera_frame_size_str(), CONFIG_CAMERA_JPEG_QUALITY);
   return ESP_OK;
 }
 
@@ -169,7 +197,7 @@ static esp_err_t stream_handler(httpd_req_t *req) {
     }
 
     esp_camera_fb_return(fb);
-    vTaskDelay(pdMS_TO_TICKS(30));
+    vTaskDelay(pdMS_TO_TICKS(CONFIG_CAMERA_STREAM_FRAME_INTERVAL));
   }
 
   return ESP_OK;

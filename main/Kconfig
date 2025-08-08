@@ -12,18 +12,44 @@ menu "Camera Web Server Configuration"
         help
             Enter the password for your Wi-Fi network.
 
-    config CAMERA_FRAME_SIZE
-        string "Camera Frame Size"
-        default "SVGA"
-        help
-            Choose the desired frame size for the camera stream.
-            Options: UXGA, SXGA, XGA, SVGA, VGA, CIF, QVGA, HQVGA, QQVGA.
+    choice
+        prompt "Camera Frame Size"
+        default CAMERA_FRAME_SIZE_SVGA
+
+        config CAMERA_FRAME_SIZE_UXGA
+            bool "UXGA (1600x1200)"
+        config CAMERA_FRAME_SIZE_SXGA
+            bool "SXGA (1280x1024)"
+        config CAMERA_FRAME_SIZE_XGA
+            bool "XGA (1024x768)"
+        config CAMERA_FRAME_SIZE_SVGA
+            bool "SVGA (800x600)"
+        config CAMERA_FRAME_SIZE_VGA
+            bool "VGA (640x480)"
+        config CAMERA_FRAME_SIZE_CIF
+            bool "CIF (352x288)"
+        config CAMERA_FRAME_SIZE_QVGA
+            bool "QVGA (320x240)"
+        config CAMERA_FRAME_SIZE_HQVGA
+            bool "HQVGA (240x160)"
+        config CAMERA_FRAME_SIZE_QQVGA
+            bool "QQVGA (160x120)"
+    endchoice
 
     config CAMERA_JPEG_QUALITY
         int "JPEG Quality"
-        range 0 63
+        range 10 63
         default 12
         help
-            Set the JPEG quality (0-63). Lower numbers mean higher quality and larger file size.
+            Set the JPEG quality (10–63). Lower values mean higher quality.
+
+    config CAMERA_STREAM_FRAME_INTERVAL
+        int "Stream Frame Interval (ms)"
+        range 0 200
+        default 30
+        help
+            Time between each frame sent to the stream (in milliseconds).
+            Lower value increases frame rate but uses more bandwidth and CPU.
 
 endmenu
+
