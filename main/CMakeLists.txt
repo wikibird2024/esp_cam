@@ -1,2 +1,6 @@
-idf_component_register(SRCS "main.c"
-                    INCLUDE_DIRS ".")
+
+idf_component_register(
+    SRCS "main.c"
+    INCLUDE_DIRS "."
+    REQUIRES esp_netif esp_http_server esp_wifi esp32-camera mdns nvs_flash
+)

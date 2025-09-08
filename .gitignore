@@ -1,0 +1,30 @@
+# Build output folders
+build/
+sdkconfig.h
+sdkconfig.c
+sdkconfig
+
+# Dependencies, libraries & components
+managed_components/
+
+# Python virtual environment
+.env/
+
+# IDE files
+.vscode/
+.history/
+.idea/
+
+# Flash output
+*.bin
+*.elf
+*.map
+
+# Files from other compilers/systems
+*.o
+*.d
+*.a
+.DS_Store
+
+# Log files
+*.log
