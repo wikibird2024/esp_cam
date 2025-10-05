@@ -45,7 +45,6 @@ static const char index_html[] =
 
 //---------------- mDNS ----------------//
 static void mdns_init_service(void) {
-  // Chuẩn 5.x: bỏ tiền tố esp_
   ESP_ERROR_CHECK(mdns_init());
   ESP_ERROR_CHECK(mdns_hostname_set("esp32-cam"));
   ESP_ERROR_CHECK(mdns_instance_name_set("ESP32 Camera Stream"));
