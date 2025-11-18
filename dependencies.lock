@@ -1,4 +1,17 @@
 dependencies:
+  esp32-camera:
+    component_hash: cfd596e626c2a0e58acb4db981983d752ecd67507031c002f2f256a3a21fdb79
+    dependencies:
+    - name: idf
+      version: '>=5.1'
+    - name: espressif/esp_jpeg
+      public: true
+      version: ^1.3.1
+    source:
+      git: https://github.com/espressif/esp32-camera.git
+      path: .
+      type: git
+    version: b817e9b81041980608d1a3d3e0b08d86e3666382
   espressif/esp_jpeg:
     component_hash: defb83669293cbf86d0fa86b475ba5517aceed04ed70db435388c151ab37b5d7
     dependencies:
@@ -22,11 +35,11 @@ dependencies:
   idf:
     source:
       type: idf
-    version: 5.5.0
+    version: 5.5.1
 direct_dependencies:
-- espressif/esp_jpeg
+- esp32-camera
 - espressif/mdns
 - idf
-manifest_hash: 4513f2ae7a33cea7ff47d4f12db8ae4edd313bfa6165a5d791c435af32c7e419
+manifest_hash: a894264b3cfef34e43cd20f14db68cffc560a8e172bdbe6c3fb5a2f55c173261
 target: esp32s3
 version: 2.0.0
