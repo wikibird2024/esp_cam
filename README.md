@@ -35,6 +35,6 @@ Dự án triển khai một máy chủ truyền phát video (Video Streaming Ser
 2. **Cấu hình:**
    ```bash
    idf.py menuconfig
-idf.py build flash monitor ```
+   idf.py build flash monitor ```
 
 Truy cập: Mở trình duyệt và nhập http://esp32-cam.local
